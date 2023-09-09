@@ -22,10 +22,31 @@ function getCodeVerifier() {
   return [codeVerifier, codeChallenge];
 }
 
+const getImage = async (items, client) => {
+  const images = {};
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const imageIds = item.itemData.imageIds;
+    if (imageIds) {
+      try {
+        const response = await client.catalogApi.batchRetrieveCatalogObjects({
+          objectIds: imageIds,
+        });
+        images[item.id] = response.result.objects[0].imageData.url;
+      } catch (error) {
+        console.log(error);
+      }
+    }
+  }
+  return images;
+};
+
 const getUserData = async (accessToken) => {
   const data = {
     merchantsInfo: [],
     catalog: {},
+    images: {},
   };
 
   const client = new Client({
@@ -39,8 +60,6 @@ const getUserData = async (accessToken) => {
   try {
     const response = await client.merchantsApi.listMerchants();
     data.merchantsInfo = response.result.merchant;
-
-    console.log(response.result);
   } catch (error) {
     console.log(error);
   }
@@ -48,6 +67,7 @@ const getUserData = async (accessToken) => {
   try {
     const response = await client.catalogApi.listCatalog();
     data.catalog = response.result;
+    data.images = await getImage(response.result.objects, client);
   } catch (error) {
     console.log(error);
   }
@@ -81,6 +101,7 @@ export default async function Home(searchParams) {
   const [codeVerifier, codeChallenge] = getCodeVerifier();
   const merchantsInfo = [];
   let catalog = {};
+  let images = {};
   let loginUrl =
     process.env.ENVIRONMENT === "production"
       ? "https://connect.squareup.com/oauth2/authorize"
@@ -95,10 +116,10 @@ export default async function Home(searchParams) {
           authorizationCode,
           codeVerifier
         );
-        console.log(accessToken);
         const userData = await getUserData(accessToken);
         merchantsInfo.push(userData.merchantsInfo);
         catalog = userData.catalog;
+        images = userData.images;
         return false;
       } catch (error) {
         console.log(error);
@@ -118,7 +139,7 @@ export default async function Home(searchParams) {
       {showLogin ? (
         <Login link={loginUrl} codeVerifier={codeVerifier} />
       ) : (
-        <Main merchantsInfo={merchantsInfo} catalog={catalog} />
+        <Main merchantsInfo={merchantsInfo} catalog={catalog} images={images} />
       )}
     </div>
   );
